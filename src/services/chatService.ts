@@ -397,3 +397,14 @@ export const clearChatHistory = async (chatId: string, userId: string): Promise<
 
   await Promise.all(promises);
 };
+
+export const hasChatMessages = async (chatId: string): Promise<boolean> => {
+  const messagesRef = collection(db, 'messages');
+  const q = query(
+    messagesRef,
+    where('chatId', '==', chatId)
+  );
+
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.size > 0;
+};

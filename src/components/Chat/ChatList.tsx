@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Moon, Sun, Plus } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getUserChats, getUser, getAllUsers, createOrGetChat, getUnreadCount } from '../../services/chatService';
+import { getUserChats, getUser, getAllUsers, createOrGetChat, getUnreadCount, hasChatMessages } from '../../services/chatService';
 import { Chat, ChatWithUser, User } from '../../types';
 import { SettingsMenu } from './SettingsMenu';
 import { ProfileModal } from './ProfileModal';
@@ -50,6 +50,9 @@ export const ChatList: React.FC<ChatListProps> = ({
 
           const otherUser = await getUser(otherUserId);
           if (!otherUser) return null;
+
+          const hasMessages = await hasChatMessages(chat.id);
+          if (!hasMessages) return null;
 
           const unreadCount = await getUnreadCount(chat.id, currentUser.uid);
 
