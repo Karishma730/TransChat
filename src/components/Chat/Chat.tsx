@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChatList } from './ChatList';
 import { ChatWindow } from './ChatWindow';
 import { NewChatModal } from './NewChatModal';
@@ -12,6 +12,13 @@ export const Chat: React.FC = () => {
   const { getSettings, setSettings } = useChatTranslation();
   const [selectedChat, setSelectedChat] = useState<ChatWithUser | null>(null);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (currentUser) {
+      setBlockedUsers(new Set(currentUser.blockList || []));
+    }
+  }, [currentUser]);
 
   const handleSelectChat = (chat: ChatWithUser) => {
     setSelectedChat(chat);
@@ -82,6 +89,7 @@ export const Chat: React.FC = () => {
             onBack={handleBack}
             translationEnabled={settings.enabled}
             targetLanguage={settings.targetLanguage}
+            blockedUsers={blockedUsers}
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500">

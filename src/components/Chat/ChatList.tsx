@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Moon, Sun, Plus } from 'lucide-react';
+import { Moon, Sun, Plus, Trash2, Ban } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getUserChats, getUser, getAllUsers, createOrGetChat, getUnreadCount, hasChatMessages } from '../../services/chatService';
+import { getUserChats, getUser, getAllUsers, createOrGetChat, getUnreadCount, hasChatMessages, deleteChat, blockUser, unblockUser, isUserBlocked } from '../../services/chatService';
 import { Chat, ChatWithUser, User } from '../../types';
 import { SettingsMenu } from './SettingsMenu';
 import { ProfileModal } from './ProfileModal';
@@ -25,6 +25,8 @@ export const ChatList: React.FC<ChatListProps> = ({
   const [loading, setLoading] = useState(true);
   const [creatingChat, setCreatingChat] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ chatId: string; x: number; y: number } | null>(null);
+  const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!currentUser) return;
@@ -34,6 +36,9 @@ export const ChatList: React.FC<ChatListProps> = ({
         const allUsers = await getAllUsers();
         const filteredUsers = allUsers.filter((user) => user.uid !== currentUser.uid);
         setUsers(filteredUsers);
+
+        const blocked = new Set(currentUser.blockList || []);
+        setBlockedUsers(blocked);
       } catch (error) {
         console.error('Error fetching users:', error);
       }
@@ -45,6 +50,8 @@ export const ChatList: React.FC<ChatListProps> = ({
     const unsubscribe = getUserChats(currentUser.uid, (fetchedChats: Chat[]) => {
       Promise.all(
         fetchedChats.map(async (chat) => {
+          if (chat.deletedAt) return null;
+
           const otherUserId = chat.participants.find((id) => id !== currentUser.uid);
           if (!otherUserId) return null;
 
@@ -90,6 +97,41 @@ export const ChatList: React.FC<ChatListProps> = ({
       console.error('Error creating chat:', error);
     } finally {
       setCreatingChat(false);
+    }
+  };
+
+  const handleDeleteChat = async (chatId: string) => {
+    if (!currentUser) return;
+
+    try {
+      await deleteChat(chatId);
+      setChats(chats.filter((chat) => chat.id !== chatId));
+      setContextMenu(null);
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      alert('Failed to delete chat');
+    }
+  };
+
+  const handleBlockUser = async (chatId: string, userId: string, isBlocked: boolean) => {
+    if (!currentUser) return;
+
+    try {
+      if (isBlocked) {
+        await unblockUser(currentUser.uid, userId);
+        setBlockedUsers((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(userId);
+          return newSet;
+        });
+      } else {
+        await blockUser(currentUser.uid, userId);
+        setBlockedUsers((prev) => new Set(prev).add(userId));
+      }
+      setContextMenu(null);
+    } catch (error) {
+      console.error('Error blocking user:', error);
+      alert('Failed to update block status');
     }
   };
 
@@ -178,41 +220,91 @@ export const ChatList: React.FC<ChatListProps> = ({
             )}
           </div>
         ) : (
-          chats.map((chat) => (
-            <button
-              key={chat.id}
-              onClick={() => onSelectChat(chat)}
-              className={`w-full px-4 py-3 flex items-center hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
-                selectedChatId === chat.id
-                  ? 'bg-gray-100 dark:bg-gray-700'
-                  : ''
-              }`}
-            >
-              <div className="w-12 h-12 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                {chat.otherUser.displayName.charAt(0).toUpperCase()}
-              </div>
-              <div className="ml-3 flex-1 text-left overflow-hidden">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                    {chat.otherUser.displayName}
-                  </h3>
-                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                    {chat.unreadCount && chat.unreadCount > 0 && (
-                      <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-teal-500 rounded-full">
-                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-                      </span>
-                    )}
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatTime(chat.lastMessageTime)}
-                    </span>
-                  </div>
+          <>
+            {chats.map((chat) => {
+              const isBlocked = blockedUsers.has(chat.otherUser.uid);
+              return (
+                <div key={chat.id} className="relative">
+                  <button
+                    onClick={() => onSelectChat(chat)}
+                    onDoubleClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setContextMenu({
+                        chatId: chat.id,
+                        x: rect.left + rect.width / 2,
+                        y: rect.top + rect.height / 2,
+                      });
+                    }}
+                    className={`w-full px-4 py-3 flex items-center hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
+                      selectedChatId === chat.id
+                        ? 'bg-gray-100 dark:bg-gray-700'
+                        : ''
+                    }`}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-teal-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      {chat.otherUser.displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="ml-3 flex-1 text-left overflow-hidden">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                          {chat.otherUser.displayName}
+                          {isBlocked && <span className="ml-2 text-xs text-red-500">(blocked)</span>}
+                        </h3>
+                        <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                          {chat.unreadCount && chat.unreadCount > 0 && (
+                            <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-teal-500 rounded-full">
+                              {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatTime(chat.lastMessageTime)}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                        {chat.lastMessage || 'No messages yet'}
+                      </p>
+                    </div>
+                  </button>
+
+                  {contextMenu && contextMenu.chatId === chat.id && (
+                    <div
+                      className="fixed bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50"
+                      style={{
+                        left: `${contextMenu.x - 60}px`,
+                        top: `${contextMenu.y}px`,
+                      }}
+                    >
+                      <button
+                        onClick={() => handleDeleteChat(chat.id)}
+                        className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 rounded-t-lg"
+                      >
+                        <Trash2 size={16} />
+                        Delete Chat
+                      </button>
+                      <button
+                        onClick={() => handleBlockUser(chat.id, chat.otherUser.uid, isBlocked)}
+                        className={`w-full px-4 py-2 text-left flex items-center gap-2 rounded-b-lg ${
+                          isBlocked
+                            ? 'text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20'
+                            : 'text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                        }`}
+                      >
+                        <Ban size={16} />
+                        {isBlocked ? 'Unblock User' : 'Block User'}
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                  {chat.lastMessage || 'No messages yet'}
-                </p>
-              </div>
-            </button>
-          ))
+              );
+            })}
+            {contextMenu && (
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setContextMenu(null)}
+              />
+            )}
+          </>
         )}
       </div>
 

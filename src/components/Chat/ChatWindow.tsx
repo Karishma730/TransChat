@@ -16,6 +16,7 @@ import {
   deleteMessageForEveryone,
   markMessagesAsRead,
   canSendMessage,
+  getUnreadMessages,
 } from '../../services/chatService';
 import { translateText } from '../../services/translationService';
 import { uploadMedia, validateMediaFile, getMediaType } from '../../services/storageService';
@@ -31,6 +32,7 @@ interface ChatWindowProps {
   onBack: () => void;
   translationEnabled: boolean;
   targetLanguage: string;
+  blockedUsers?: Set<string>;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -39,6 +41,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onBack,
   translationEnabled: initialTranslationEnabled,
   targetLanguage: initialTargetLanguage,
+  blockedUsers = new Set(),
 }) => {
   const { currentUser } = useAuth();
   const { isDark } = useTheme();
@@ -50,7 +53,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [uploading, setUploading] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showContactProfile, setShowContactProfile] = useState(false);
+  const [unreadMessageIds, setUnreadMessageIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasMarkedAsReadRef = useRef(false);
 
   useEffect(() => {
     const settings = getSettings(chatId);
@@ -59,12 +64,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [chatId, getSettings]);
 
   useEffect(() => {
-    if (!chatId) return;
+    if (!chatId || !currentUser) return;
+
+    if (!hasMarkedAsReadRef.current) {
+      getUnreadMessages(chatId, currentUser.uid).then((unreadMsgs) => {
+        setUnreadMessageIds(new Set(unreadMsgs.map((msg) => msg.id)));
+      });
+      hasMarkedAsReadRef.current = true;
+    }
 
     const unsubscribe = getChatMessages(chatId, async (fetchedMessages) => {
       const deletedLocally = getDeletedMessagesForChat(chatId);
       const filteredMessages = fetchedMessages.filter(
-        (msg) => !deletedLocally.has(msg.id)
+        (msg) => !deletedLocally.has(msg.id) && !blockedUsers.has(msg.senderId)
       );
 
       let processedMessages = filteredMessages;
@@ -86,7 +98,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
 
     return () => unsubscribe();
-  }, [chatId, translationEnabled, targetLanguage, currentUser]);
+  }, [chatId, translationEnabled, targetLanguage, currentUser, blockedUsers]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -224,19 +236,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const getMessagesWithDateSeparators = () => {
-    const messagesWithSeparators: Array<{ type: 'message' | 'date'; data: Message | Date }> = [];
+    const messagesWithSeparators: Array<{ type: 'message' | 'date' | 'unread'; data: Message | Date | null }> = [];
+    let unreadSeparatorAdded = false;
 
     messages.forEach((message, index) => {
       if (index === 0) {
         messagesWithSeparators.push({ type: 'date', data: message.timestamp });
-        messagesWithSeparators.push({ type: 'message', data: message });
       } else {
         const previousMessage = messages[index - 1];
         if (!isSameDay(previousMessage.timestamp, message.timestamp)) {
           messagesWithSeparators.push({ type: 'date', data: message.timestamp });
         }
-        messagesWithSeparators.push({ type: 'message', data: message });
       }
+
+      if (unreadMessageIds.has(message.id) && !unreadSeparatorAdded) {
+        messagesWithSeparators.push({ type: 'unread', data: null });
+        unreadSeparatorAdded = true;
+      }
+
+      messagesWithSeparators.push({ type: 'message', data: message });
     });
 
     return messagesWithSeparators;
@@ -264,6 +282,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             {getMessagesWithDateSeparators().map((item, index) => {
               if (item.type === 'date') {
                 return <DateSeparator key={`date-${index}`} date={item.data as Date} />;
+              } else if (item.type === 'unread') {
+                return (
+                  <div key={`unread-${index}`} className="flex items-center gap-3 px-4 py-3 my-2">
+                    <div className="flex-1 border-t-2 border-dotted border-gray-300 dark:border-gray-600"></div>
+                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase whitespace-nowrap">
+                      Unread Messages
+                    </span>
+                    <div className="flex-1 border-t-2 border-dotted border-gray-300 dark:border-gray-600"></div>
+                  </div>
+                );
               } else {
                 const message = item.data as Message;
                 return (

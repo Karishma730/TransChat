@@ -43,6 +43,7 @@ export interface Chat {
       targetLanguage: string;
     };
   };
+  deletedAt?: Date;
 }
 
 export interface ChatWithUser extends Chat {

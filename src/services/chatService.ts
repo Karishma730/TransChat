@@ -408,3 +408,54 @@ export const hasChatMessages = async (chatId: string): Promise<boolean> => {
   const querySnapshot = await getDocs(q);
   return querySnapshot.size > 0;
 };
+
+export const deleteChat = async (chatId: string): Promise<void> => {
+  const chatRef = doc(db, 'chats', chatId);
+  await setDoc(
+    chatRef,
+    {
+      deletedAt: Timestamp.now(),
+    },
+    { merge: true }
+  );
+};
+
+export const getUnreadMessages = async (chatId: string, userId: string): Promise<Message[]> => {
+  const messagesRef = collection(db, 'messages');
+  const q = query(
+    messagesRef,
+    where('chatId', '==', chatId),
+    where('receiverId', '==', userId),
+    orderBy('timestamp', 'asc')
+  );
+
+  const querySnapshot = await getDocs(q);
+  const messages: Message[] = [];
+
+  querySnapshot.forEach((doc) => {
+    const data = doc.data();
+    const readBy = data.readBy || [];
+
+    if (!readBy.includes(userId)) {
+      messages.push({
+        id: doc.id,
+        chatId: data.chatId,
+        senderId: data.senderId,
+        receiverId: data.receiverId,
+        originalText: data.originalText,
+        translatedText: data.translatedText,
+        mediaUrl: data.mediaUrl,
+        mediaType: data.mediaType,
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        timestamp: data.timestamp.toDate(),
+        deletedForEveryone: data.deletedForEveryone || false,
+        deletedAt: data.deletedAt ? data.deletedAt.toDate() : undefined,
+        replyTo: data.replyTo || undefined,
+        readBy: data.readBy,
+      });
+    }
+  });
+
+  return messages;
+};
