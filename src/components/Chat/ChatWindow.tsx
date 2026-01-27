@@ -64,6 +64,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [chatId, getSettings]);
 
   useEffect(() => {
+    hasMarkedAsReadRef.current = false;
+  }, [chatId]);
+
+  useEffect(() => {
     if (!chatId || !currentUser) return;
 
     if (!hasMarkedAsReadRef.current) {
@@ -106,7 +110,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   useEffect(() => {
     if (chatId && currentUser) {
-      markMessagesAsRead(chatId, currentUser.uid);
+      markMessagesAsRead(chatId, currentUser.uid).then(() => {
+        setUnreadMessageIds(new Set());
+      });
     }
   }, [chatId, currentUser]);
 
