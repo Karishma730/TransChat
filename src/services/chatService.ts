@@ -138,6 +138,7 @@ export const sendMessage = async (
     fileName: fileName || '',
     fileSize: fileSize || 0,
     timestamp: Timestamp.now(),
+    readBy: [],
     replyTo: replyToId ? {
       messageId: replyToId,
       senderName: replyToSenderName || '',
