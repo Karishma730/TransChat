@@ -62,6 +62,10 @@ export const Chat: React.FC = () => {
     setSelectedChat(null);
   };
 
+  const handleChatDeleted = () => {
+    setSelectedChat(null);
+  };
+
   const getChatSettings = () => {
     if (!selectedChat || !currentUser) {
       return { enabled: false, targetLanguage: 'en' };
@@ -90,6 +94,7 @@ export const Chat: React.FC = () => {
             translationEnabled={settings.enabled}
             targetLanguage={settings.targetLanguage}
             blockedUsers={blockedUsers}
+            onChatDeleted={handleChatDeleted}
           />
         ) : (
           <div className="h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500">

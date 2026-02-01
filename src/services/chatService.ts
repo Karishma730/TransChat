@@ -107,6 +107,7 @@ export const getChatMessages = (chatId: string, callback: (messages: Message[]) 
         deletedForEveryone: data.deletedForEveryone || false,
         deletedAt: data.deletedAt ? data.deletedAt.toDate() : undefined,
         replyTo: data.replyTo || undefined,
+        readBy: data.readBy || [],
       });
     });
     callback(messages);

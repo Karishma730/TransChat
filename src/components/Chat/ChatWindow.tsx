@@ -17,6 +17,9 @@ import {
   markMessagesAsRead,
   canSendMessage,
   getUnreadMessages,
+  deleteChat,
+  blockUser,
+  unblockUser,
 } from '../../services/chatService';
 import { translateText } from '../../services/translationService';
 import { uploadMedia, validateMediaFile, getMediaType } from '../../services/storageService';
@@ -33,6 +36,7 @@ interface ChatWindowProps {
   translationEnabled: boolean;
   targetLanguage: string;
   blockedUsers?: Set<string>;
+  onChatDeleted?: () => void;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -42,6 +46,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   translationEnabled: initialTranslationEnabled,
   targetLanguage: initialTargetLanguage,
   blockedUsers = new Set(),
+  onChatDeleted,
 }) => {
   const { currentUser } = useAuth();
   const { isDark } = useTheme();
@@ -54,6 +59,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showContactProfile, setShowContactProfile] = useState(false);
   const [unreadMessageIds, setUnreadMessageIds] = useState<Set<string>>(new Set());
+  const [isUserBlocked, setIsUserBlocked] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasMarkedAsReadRef = useRef(false);
 
@@ -66,6 +72,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   useEffect(() => {
     hasMarkedAsReadRef.current = false;
   }, [chatId]);
+
+  useEffect(() => {
+    if (blockedUsers.has(otherUser.uid)) {
+      setIsUserBlocked(true);
+    } else {
+      setIsUserBlocked(false);
+    }
+  }, [otherUser.uid, blockedUsers]);
 
   useEffect(() => {
     if (!chatId || !currentUser) return;
@@ -235,6 +249,36 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
+  const handleDeleteChat = async () => {
+    if (!currentUser) return;
+
+    try {
+      await deleteChat(chatId);
+      onChatDeleted?.();
+      onBack();
+    } catch (error) {
+      console.error('Error deleting chat:', error);
+      alert('Failed to delete chat');
+    }
+  };
+
+  const handleBlockUser = async (isBlocked: boolean) => {
+    if (!currentUser) return;
+
+    try {
+      if (isBlocked) {
+        await unblockUser(currentUser.uid, otherUser.uid);
+        setIsUserBlocked(false);
+      } else {
+        await blockUser(currentUser.uid, otherUser.uid);
+        setIsUserBlocked(true);
+      }
+    } catch (error) {
+      console.error('Error updating block status:', error);
+      alert('Failed to update block status');
+    }
+  };
+
   const isSameDay = (date1: Date, date2: Date) => {
     return date1.getFullYear() === date2.getFullYear() &&
       date1.getMonth() === date2.getMonth() &&
@@ -276,6 +320,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         targetLanguage={targetLanguage}
         onLanguageChange={handleLanguageChange}
         onContactClick={() => setShowContactProfile(true)}
+        onDeleteChat={handleDeleteChat}
+        onBlockUser={handleBlockUser}
+        isBlocked={isUserBlocked}
       />
 
       <div className="flex-1 overflow-y-auto py-4">

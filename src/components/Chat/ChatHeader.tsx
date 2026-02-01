@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Languages, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Languages, ChevronDown, Trash2, Ban } from 'lucide-react';
 import { User } from '../../types';
 import { SUPPORTED_LANGUAGES } from '../../services/translationService';
 
@@ -11,6 +11,9 @@ interface ChatHeaderProps {
   targetLanguage?: string;
   onLanguageChange?: (language: string) => void;
   onContactClick?: () => void;
+  onDeleteChat?: () => void;
+  onBlockUser?: (isBlocked: boolean) => void;
+  isBlocked?: boolean;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -21,15 +24,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   targetLanguage = 'en',
   onLanguageChange,
   onContactClick,
+  onDeleteChat,
+  onBlockUser,
+  isBlocked = false,
 }) => {
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
   const currentLanguage = SUPPORTED_LANGUAGES.find((lang) => lang.code === targetLanguage) || SUPPORTED_LANGUAGES[0];
 
   return (
     <div className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
       <button
-        onClick={onContactClick}
-        className="flex items-center flex-1 hover:opacity-75 transition-opacity"
+        onClick={() => setShowActionMenu(!showActionMenu)}
+        className="flex items-center flex-1 hover:opacity-75 transition-opacity relative"
       >
         <button
           onClick={(e) => {
@@ -49,7 +56,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </div>
       </button>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 relative">
         <button
           onClick={onToggleTranslation}
           className={`p-2 rounded-full transition-colors ${
@@ -94,6 +101,45 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {showActionMenu && (onDeleteChat || onBlockUser) && (
+          <>
+            <div
+              className="fixed inset-0 z-30"
+              onClick={() => setShowActionMenu(false)}
+            />
+            <div className="absolute top-12 right-0 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-40 w-40">
+              {onDeleteChat && (
+                <button
+                  onClick={() => {
+                    onDeleteChat();
+                    setShowActionMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 rounded-t-lg"
+                >
+                  <Trash2 size={16} />
+                  Delete Chat
+                </button>
+              )}
+              {onBlockUser && (
+                <button
+                  onClick={() => {
+                    onBlockUser(isBlocked);
+                    setShowActionMenu(false);
+                  }}
+                  className={`w-full px-4 py-2 text-left flex items-center gap-2 rounded-b-lg ${
+                    isBlocked
+                      ? 'text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20'
+                      : 'text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                  }`}
+                >
+                  <Ban size={16} />
+                  {isBlocked ? 'Unblock User' : 'Block User'}
+                </button>
+              )}
+            </div>
+          </>
         )}
       </div>
     </div>
